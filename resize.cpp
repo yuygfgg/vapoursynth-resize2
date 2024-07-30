@@ -1207,6 +1207,10 @@ class vszimg {
             } else {
                 throw;
             }
+        } catch (const zimg::error::Exception &e) {
+            vsapi->freeFrame(dst_frame);
+
+            throw std::runtime_error{ e.what() };
         } catch (...) {
             vsapi->freeFrame(dst_frame);
             throw;
