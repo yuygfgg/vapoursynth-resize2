@@ -1,0 +1,55 @@
+name: Build (Windows / MSYS2)
+
+on:
+  push:
+    paths:
+      - 'resize.cpp'
+      - 'meson.build'
+      - 'meson_options.txt'
+      - '.github/workflows/windows.yml'
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
+
+    - name: Clone VapourSynth and Zimg
+      shell: 'pwsh'
+      run: |
+        git clone --recurse-submodules --remote-submodules https://github.com/vapoursynth/vapoursynth.git
+        git clone --recurse-submodules --remote-submodules https://bitbucket.org/the-sekrit-twc/zimg.git
+
+    - uses: msys2/setup-msys2@v2
+      with:
+        msystem: mingw64
+        update: true
+        pacboy: >-
+          cmake:p
+          meson:p
+          gcc:p
+          vapoursynth:p
+
+    - name: Configure and build
+      run: |
+        meson setup builddir --buildtype release
+        meson compile -C builddir
+
+    - name: Upload
+      uses: actions/upload-artifact@v4
+      with:
+        name: resize2-win64
+        path: builddir/libresize2.dll
+
+    - name: Dump Meson Debug Info
+      if: failure()
+      run: cat builddir/meson-logs/meson-log.txt
