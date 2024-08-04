@@ -756,40 +756,33 @@ class CustomZimgFilter : public Filter {
 
     const VSAPI *vsapi;
 
-    VSMap *_in;
-    VSMap *_out;
 public:
-    CustomZimgFilter(unsigned taps, VSFunction *func, const VSAPI *vsapi) : taps(taps), func(func), vsapi(vsapi) {
-        _in = vsapi->createMap();
-        _out = vsapi->createMap();
-    }
+    CustomZimgFilter(unsigned taps, VSFunction *func, const VSAPI *vsapi) : taps(taps), func(func), vsapi(vsapi) {}
 
     ~CustomZimgFilter() {
-        vsapi->freeMap(_in);
-        vsapi->freeMap(_out);
-
         vsapi->freeFunction(func);
     }
 
     unsigned support() const override { return taps; };
 
     double operator()(double x) const override {
+        VSMap *_map = vsapi->createMap();
         int _err;
 
-        vsapi->mapSetFloat(_in, "x", x, maReplace);
-        vsapi->callFunction(func, _in, _out);
+        vsapi->mapSetFloat(_map, "x", x, maReplace);
+        vsapi->callFunction(func, _map, _map);
 
-        const char *ret_str = vsapi->mapGetError(_out);
+        const char *ret_str = vsapi->mapGetError(_map);
 
         if (ret_str)
             throw zimg::error::Exception{ "There was an error running the custom kernel: " + std::string(ret_str) };
 
-        double value = vsapi->mapGetFloat(_out, "val", 0, &_err);
-        vsapi->clearMap(_out);
+        double value = vsapi->mapGetFloat(_map, "val", 0, &_err);
+        vsapi->clearMap(_map);
 
         if (_err)
             throw zimg::error::Exception{
-                "Running custom_kernel(" + std::to_string(x) + ") returned invalid value: " + std::to_string(value)
+                "Running custom_kernel(" + std::to_string(x) + ") returned error(" + std::to_string(_err) + ") for invalid value: " + std::to_string(value)
             };
 
         return value;
