@@ -538,7 +538,7 @@ void import_frame_props(const VSMap *props, vsrz_image_format *format, bool *int
         switch (x) {
         case 0:
         case 1:
-            format->fullrange = !!x;
+            format->fullrange = !x;
             break;
         default:
             throw std::runtime_error{ "bad _ColorRange value: " + std::to_string(x) };
