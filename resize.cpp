@@ -330,9 +330,9 @@ struct vsrz_image_format {
     unsigned subsample_h;
 
     GraphBuilder::ColorFamily color_family;
-    MatrixCoefficients matrix_coefficients;
-    TransferCharacteristics transfer_characteristics;
-    ColorPrimaries color_primaries;
+    zimg_matrix_coefficients_e matrix_coefficients;
+    zimg_transfer_characteristics_e transfer_characteristics;
+    zimg_color_primaries_e color_primaries;
 
     unsigned depth;
     bool fullrange;
@@ -360,9 +360,9 @@ struct vsrz_image_format {
         this->subsample_h = 0;
 
         this->color_family = GraphBuilder::ColorFamily::GREY;
-        this->matrix_coefficients = MatrixCoefficients::UNSPECIFIED;
-        this->transfer_characteristics = TransferCharacteristics::UNSPECIFIED;
-        this->color_primaries = ColorPrimaries::UNSPECIFIED;
+        this->matrix_coefficients = zimg_matrix_coefficients_e::ZIMG_MATRIX_UNSPECIFIED;
+        this->transfer_characteristics = zimg_transfer_characteristics_e::ZIMG_TRANSFER_UNSPECIFIED;
+        this->color_primaries = zimg_color_primaries_e::ZIMG_PRIMARIES_UNSPECIFIED;
 
         this->depth = 0;
         this->fullrange = false;
@@ -433,6 +433,20 @@ T propGetScalarDef(const VSMap *map, const char *key, T def, const VSAPI *vsapi)
 }
 
 template <class T, class U, class S, class Pred>
+void propGetIfValid(const VSMap *map, const char *key, S *out, const std::unordered_map<S, U> &enum_table, Pred pred, const VSAPI *vsapi) {
+    if (vsapi->mapNumElements(map, key) > 0) {
+        T x = propGetScalar<T>(map, key, vsapi);
+        if (pred(x)) {
+            auto it = enum_table.find(static_cast<S>(x));
+            if (it != enum_table.end())
+                *out = it->first;
+            else
+                throw std::runtime_error{ "bad value: "s + key };
+        }
+    }
+}
+
+template <class T, class U, class S, class Pred>
 void propGetIfValid(const VSMap *map, const char *key, U *out, const std::unordered_map<S, U> &enum_table, Pred pred, const VSAPI *vsapi) {
     if (vsapi->mapNumElements(map, key) > 0) {
         T x = propGetScalar<T>(map, key, vsapi);
@@ -473,19 +487,19 @@ void translate_vs_pixel_type(const VSVideoFormat *format, PixelType *out, const 
     }
 }
 
-void translate_vs_color_family(VSColorFamily cf, GraphBuilder::ColorFamily *out, MatrixCoefficients *out_matrix) {
+void translate_vs_color_family(VSColorFamily cf, GraphBuilder::ColorFamily *out, zimg_matrix_coefficients_e *out_matrix) {
     switch (cf) {
     case cfGray:
         *out = GraphBuilder::ColorFamily::GREY;
-        *out_matrix = MatrixCoefficients::UNSPECIFIED;
+        *out_matrix = zimg_matrix_coefficients_e::ZIMG_MATRIX_UNSPECIFIED;
         break;
     case cfRGB:
         *out = GraphBuilder::ColorFamily::RGB;
-        *out_matrix = MatrixCoefficients::RGB;
+        *out_matrix = zimg_matrix_coefficients_e::ZIMG_MATRIX_RGB;
         break;
     case cfYUV:
         *out = GraphBuilder::ColorFamily::YUV;
-        *out_matrix = MatrixCoefficients::UNSPECIFIED;
+        *out_matrix = zimg_matrix_coefficients_e::ZIMG_MATRIX_UNSPECIFIED;
         break;
     default:
         throw std::runtime_error{ "unsupported color family" };
@@ -606,9 +620,9 @@ void export_frame_props(const vsrz_image_format &format, VSMap *props, const VSA
 
     vsapi->mapSetInt(props, "_ColorRange", (int) !format.fullrange, maReplace);
 
-    set_int_if_positive("_Matrix", get_from_table(format.matrix_coefficients, h_matrix_table));
-    set_int_if_positive("_Transfer", get_from_table(format.transfer_characteristics, h_transfer_table));
-    set_int_if_positive("_Primaries", get_from_table(format.color_primaries, h_primaries_table));
+    set_int_if_positive("_Matrix", (int) format.matrix_coefficients);
+    set_int_if_positive("_Transfer", (int) format.transfer_characteristics);
+    set_int_if_positive("_Primaries", (int) format.color_primaries);
 }
 
 void propagate_sar(const VSMap *src_props, VSMap *dst_props, const vsrz_image_format &src_format, const vsrz_image_format &dst_format, const VSAPI *vsapi) {
@@ -721,6 +735,16 @@ enum class FieldOp {
 };
 
 
+template <class S, class T>
+static T lookup_enum_map(const S value, const std::unordered_map<S, T> &enum_table) {
+    auto it = enum_table.find(value);
+    if (it != enum_table.end())
+        return it->second;
+
+    throw std::runtime_error{ "bad value: "s + std::to_string((int) value) };
+}
+
+
 std::pair<GraphBuilder::state, GraphBuilder::state> import_graph_state(const vsrz_image_format &src, const vsrz_image_format &dst)
 {
     GraphBuilder::state src_state{};
@@ -737,13 +761,13 @@ std::pair<GraphBuilder::state, GraphBuilder::state> import_graph_state(const vsr
         src_state.colorspace = ColorspaceDefinition{};
         dst_state.colorspace = ColorspaceDefinition{};
     } else {
-        src_state.colorspace.matrix = src.matrix_coefficients;
-        src_state.colorspace.transfer = src.transfer_characteristics;
-        src_state.colorspace.primaries = src.color_primaries;
+        src_state.colorspace.matrix = lookup_enum_map(src.matrix_coefficients, h_matrix_table);
+        src_state.colorspace.transfer = lookup_enum_map(src.transfer_characteristics, h_transfer_table);
+        src_state.colorspace.primaries = lookup_enum_map(src.color_primaries, h_primaries_table);
 
-        dst_state.colorspace.matrix = dst.matrix_coefficients;
-        dst_state.colorspace.transfer = dst.transfer_characteristics;
-        dst_state.colorspace.primaries = dst.color_primaries;
+        dst_state.colorspace.matrix = lookup_enum_map(dst.matrix_coefficients, h_matrix_table);
+        dst_state.colorspace.transfer = lookup_enum_map(dst.transfer_characteristics, h_transfer_table);
+        dst_state.colorspace.primaries = lookup_enum_map(dst.color_primaries, h_primaries_table);
     }
 
     return{ src_state, dst_state };
@@ -811,9 +835,9 @@ struct vszimg_userdata {
 
 class vszimg {
     struct frame_params {
-        std::optional<MatrixCoefficients> matrix;
-        std::optional<TransferCharacteristics> transfer;
-        std::optional<ColorPrimaries> primaries;
+        std::optional<zimg_matrix_coefficients_e> matrix;
+        std::optional<zimg_transfer_characteristics_e> transfer;
+        std::optional<zimg_color_primaries_e> primaries;
         std::optional<bool> fullrange;
         std::optional<chromaloc_pair> chromaloc;
     };
@@ -953,15 +977,15 @@ class vszimg {
                 m_vi.format = node_vi.format;
             }
 
-            lookup_enum(in, "matrix", g_matrix_table, h_matrix_table, &m_frame_params.matrix, vsapi);
-            lookup_enum(in, "transfer", g_transfer_table, h_transfer_table, &m_frame_params.transfer, vsapi);
-            lookup_enum(in, "primaries", g_primaries_table, h_primaries_table, &m_frame_params.primaries, vsapi);
+            lookup_enum_str(in, "matrix", g_matrix_table, &m_frame_params.matrix, vsapi);
+            lookup_enum_str(in, "transfer", g_transfer_table, &m_frame_params.transfer, vsapi);
+            lookup_enum_str(in, "primaries", g_primaries_table, &m_frame_params.primaries, vsapi);
             lookup_enum(in, "range", g_range_table, h_range_table, &m_frame_params.fullrange, vsapi);
             lookup_enum(in, "chromaloc", g_chromaloc_table, h_chromaloc_table, &m_frame_params.chromaloc, vsapi);
 
-            lookup_enum(in, "matrix_in", g_matrix_table, h_matrix_table, &m_frame_params_in.matrix, vsapi);
-            lookup_enum(in, "transfer_in", g_transfer_table, h_transfer_table, &m_frame_params_in.transfer, vsapi);
-            lookup_enum(in, "primaries_in", g_primaries_table, h_primaries_table, &m_frame_params_in.primaries, vsapi);
+            lookup_enum_str(in, "matrix_in", g_matrix_table, &m_frame_params_in.matrix, vsapi);
+            lookup_enum_str(in, "transfer_in", g_transfer_table, &m_frame_params_in.transfer, vsapi);
+            lookup_enum_str(in, "primaries_in", g_primaries_table, &m_frame_params_in.primaries, vsapi);
             lookup_enum(in, "range_in", g_range_table, h_range_table, &m_frame_params_in.fullrange, vsapi);
             lookup_enum(in, "chromaloc_in", g_chromaloc_table, h_chromaloc_table, &m_frame_params_in.chromaloc, vsapi);
 
@@ -1021,7 +1045,7 @@ class vszimg {
                 translate_vsformat(&m_vi.format, &dst_format, vsapi);
 
                 if ((dst_format.color_family == GraphBuilder::ColorFamily::YUV || dst_format.color_family == GraphBuilder::ColorFamily::GREY)
-                    && dst_format.matrix_coefficients == MatrixCoefficients::UNSPECIFIED
+                    && dst_format.matrix_coefficients == zimg_matrix_coefficients_e::ZIMG_MATRIX_UNSPECIFIED
                     && src_format.color_family != GraphBuilder::ColorFamily::YUV
                     && src_format.color_family != GraphBuilder::ColorFamily::GREY
                     && !m_frame_params.matrix.has_value()) {
@@ -1069,7 +1093,7 @@ class vszimg {
 
     void set_dst_colorspace(const vsrz_image_format &src_format, vsrz_image_format *dst_format) {
         // Avoid copying matrix coefficients when restricted by color family.
-        if (dst_format->matrix_coefficients != MatrixCoefficients::RGB)
+        if (dst_format->matrix_coefficients != zimg_matrix_coefficients_e::ZIMG_MATRIX_RGB)
             dst_format->matrix_coefficients = src_format.matrix_coefficients;
 
         dst_format->transfer_characteristics = src_format.transfer_characteristics;
