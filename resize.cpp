@@ -903,16 +903,21 @@ class vszimg {
         }
     }
 
+    template <class T>
+    static void lookup_enum(const VSMap *map, const char *key, const std::unordered_map<std::string, T> &enum_table, std::optional<T> *out, const VSAPI *vsapi) {
+        if (vsapi->mapNumElements(map, key) > 0) {
+            *out = static_cast<T>(propGetScalar<int>(map, key, vsapi));
+        } else {
+            std::string altkey = std::string{ key } + "_s";
+            lookup_enum_str(map, altkey.c_str(), enum_table, out, vsapi);
+        }
+    }
+
     template <class U, class T>
     static void lookup_enum(const VSMap *map, const char *key, const std::unordered_map<std::string, U> &enum_table, const std::unordered_map<U, T> &enum_table_lut, std::optional<T> *out, const VSAPI *vsapi) {
         std::optional<U> vs_value;
 
-        if (vsapi->mapNumElements(map, key) > 0) {
-            vs_value = static_cast<U>(propGetScalar<int>(map, key, vsapi));
-        } else {
-            std::string altkey = std::string{ key } + "_s";
-            lookup_enum_str(map, altkey.c_str(), enum_table, &vs_value, vsapi);
-        }
+        lookup_enum(map, key, enum_table, &vs_value, vsapi);
 
         if (!vs_value.has_value())
             return;
@@ -977,15 +982,15 @@ class vszimg {
                 m_vi.format = node_vi.format;
             }
 
-            lookup_enum_str(in, "matrix", g_matrix_table, &m_frame_params.matrix, vsapi);
-            lookup_enum_str(in, "transfer", g_transfer_table, &m_frame_params.transfer, vsapi);
-            lookup_enum_str(in, "primaries", g_primaries_table, &m_frame_params.primaries, vsapi);
+            lookup_enum(in, "matrix", g_matrix_table, &m_frame_params.matrix, vsapi);
+            lookup_enum(in, "transfer", g_transfer_table, &m_frame_params.transfer, vsapi);
+            lookup_enum(in, "primaries", g_primaries_table, &m_frame_params.primaries, vsapi);
             lookup_enum(in, "range", g_range_table, h_range_table, &m_frame_params.fullrange, vsapi);
             lookup_enum(in, "chromaloc", g_chromaloc_table, h_chromaloc_table, &m_frame_params.chromaloc, vsapi);
 
-            lookup_enum_str(in, "matrix_in", g_matrix_table, &m_frame_params_in.matrix, vsapi);
-            lookup_enum_str(in, "transfer_in", g_transfer_table, &m_frame_params_in.transfer, vsapi);
-            lookup_enum_str(in, "primaries_in", g_primaries_table, &m_frame_params_in.primaries, vsapi);
+            lookup_enum(in, "matrix_in", g_matrix_table, &m_frame_params_in.matrix, vsapi);
+            lookup_enum(in, "transfer_in", g_transfer_table, &m_frame_params_in.transfer, vsapi);
+            lookup_enum(in, "primaries_in", g_primaries_table, &m_frame_params_in.primaries, vsapi);
             lookup_enum(in, "range_in", g_range_table, h_range_table, &m_frame_params_in.fullrange, vsapi);
             lookup_enum(in, "chromaloc_in", g_chromaloc_table, h_chromaloc_table, &m_frame_params_in.chromaloc, vsapi);
 
