@@ -382,6 +382,7 @@ struct vsrz_image_format {
 typedef struct filter_graph_builder_params {
     DitherType dither_type;
     CPUClass cpu_type;
+    GraphBuilder::force_state force;
 
     double nominal_peak_luminance;
 
@@ -520,7 +521,7 @@ void translate_vsformat(const VSVideoFormat *vsformat, vsrz_image_format *format
 }
 
 
-void import_graph_state_common(const vsrz_image_format &src, GraphBuilder::state *out)
+void import_graph_state_common(const vsrz_image_format &src, GraphBuilder::state *out, const filter_graph_builder_params &params)
 {
     out->width = src.width;
     out->height = src.height;
@@ -540,6 +541,8 @@ void import_graph_state_common(const vsrz_image_format &src, GraphBuilder::state
     out->active_top = std::isnan(src.active_region.top) ? 0 : src.active_region.top;
     out->active_width = std::isnan(src.active_region.width) ? src.width : src.active_region.width;
     out->active_height = std::isnan(src.active_region.height) ? src.height : src.active_region.height;
+
+    out->force = params.force;
 }
 
 
@@ -745,13 +748,13 @@ static T lookup_enum_map(const S value, const std::unordered_map<S, T> &enum_tab
 }
 
 
-std::pair<GraphBuilder::state, GraphBuilder::state> import_graph_state(const vsrz_image_format &src, const vsrz_image_format &dst)
+std::pair<GraphBuilder::state, GraphBuilder::state> import_graph_state(const vsrz_image_format &src, const vsrz_image_format &dst, const filter_graph_builder_params &params)
 {
     GraphBuilder::state src_state{};
     GraphBuilder::state dst_state{};
 
-    import_graph_state_common(src, &src_state);
-    import_graph_state_common(dst, &dst_state);
+    import_graph_state_common(src, &src_state, params);
+    import_graph_state_common(dst, &dst_state, params);
 
     if (src.color_family == dst.color_family &&
         src.matrix_coefficients == dst.matrix_coefficients &&
@@ -858,7 +861,7 @@ class vszimg {
             GraphBuilder::params graph_params;
             GraphBuilder builder;
 
-            std::tie(src_state, dst_state) = import_graph_state(src_format, dst_format);
+            std::tie(src_state, dst_state) = import_graph_state(src_format, dst_format, params);
 
             graph_params.filter = filters[0].get();
             graph_params.filter_uv = filters[1].get();
@@ -964,6 +967,8 @@ class vszimg {
         m_field_op = u.op;
 
         try {
+            int err;
+
             m_node = vsapi->mapGetNode(in, "clip", 0, nullptr);
             const VSVideoInfo &node_vi = *vsapi->getVideoInfo(m_node);
 
@@ -995,10 +1000,8 @@ class vszimg {
             lookup_enum(in, "chromaloc_in", g_chromaloc_table, h_chromaloc_table, &m_frame_params_in.chromaloc, vsapi);
 
             if (u.custom) {
-                int _;
-
                 unsigned taps = propGetScalar<unsigned>(in, "taps", vsapi);
-                m_custom_kernel = vsapi->mapGetFunction(in, "custom_kernel", 0, &_);
+                m_custom_kernel = vsapi->mapGetFunction(in, "custom_kernel", 0, &err);
 
                 try {
                     for (int i = 0; i < 2; i++)
@@ -1036,6 +1039,14 @@ class vszimg {
             m_src_width = propGetScalarDef<double>(in, "src_width", NAN, vsapi);
             m_src_height = propGetScalarDef<double>(in, "src_height", NAN, vsapi);
             m_params.nominal_peak_luminance = propGetScalarDef<double>(in, "nominal_luminance", NAN, vsapi);
+
+            if (vsapi->mapGetInt(in, "force", 0, &err)) {
+                m_params.force.force_h = true;
+                m_params.force.force_v = true;
+            } else {
+                m_params.force.force_h = !!vsapi->mapGetInt(in, "force_h", 0, &err);
+                m_params.force.force_v = !!vsapi->mapGetInt(in, "force_v", 0, &err);
+            }
 
             // Basic compatibility check.
             if (isConstantVideoFormat(&node_vi) && isConstantVideoFormat(&m_vi)) {
@@ -1156,7 +1167,7 @@ class vszimg {
                 dst_format.field_parity = GraphBuilder::FieldParity::PROGRESSIVE;
             }
 
-            if (src_format == dst_format && isSameVideoFormat(src_vsformat, dst_vsformat) && !is_shifted(src_format)) {
+            if (!m_params.force && src_format == dst_format && isSameVideoFormat(src_vsformat, dst_vsformat) && !is_shifted(src_format)) {
                 VSFrame *clone = vsapi->copyFrame(src_frame, core);
                 export_frame_props(dst_format, vsapi->getFramePropertiesRW(clone), vsapi);
                 return clone;
@@ -1359,7 +1370,7 @@ fail:
 
 VS_EXTERNAL_API(void) VapourSynthPluginInit2(VSPlugin *plugin, const VSPLUGINAPI *vspapi) {
     vspapi->configPlugin(
-        "dev.setsugen.resize2", "resize2", "Test",
+        "dev.setsugen.resize2", "resize2", "Built-in VapourSynth resizer based on zimg with some modifications.",
         VS_MAKE_VERSION(2, 0), VAPOURSYNTH_API_VERSION, 0, plugin
     );
 
@@ -1396,7 +1407,10 @@ VS_EXTERNAL_API(void) VapourSynthPluginInit2(VSPlugin *plugin, const VSPLUGINAPI
   FLOAT_OPT(src_top) \
   FLOAT_OPT(src_width) \
   FLOAT_OPT(src_height) \
-  FLOAT_OPT(nominal_luminance)
+  FLOAT_OPT(nominal_luminance) \
+  INT_OPT(force) \
+  INT_OPT(force_h) \
+  INT_OPT(force_v) \
 
     static const char RESAMPLE_ARGS[] =
         "clip:vnode;"

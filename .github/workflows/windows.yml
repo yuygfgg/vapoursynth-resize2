@@ -28,6 +28,10 @@ jobs:
       run: |
         git clone --recurse-submodules --remote-submodules https://github.com/vapoursynth/vapoursynth.git
         git clone --recurse-submodules --remote-submodules https://bitbucket.org/the-sekrit-twc/zimg.git
+        Copy-Item zimg.patch ./zimg
+        Set-Location -Path zimg
+        git apply zimg.patch
+        Set-Location -Path ..
 
     - uses: msys2/setup-msys2@v2
       with:
