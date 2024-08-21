@@ -777,14 +777,22 @@ std::pair<GraphBuilder::state, GraphBuilder::state> import_graph_state(const vsr
 }
 
 
+struct FloatHash {
+    std::size_t operator()(double f) const {
+        return std::hash<int>()(static_cast<int>(f * 1e12));
+    }
+};
+
 class CustomZimgFilter : public Filter {
     unsigned taps;
     VSFunction *func;
 
     const VSAPI *vsapi;
 
+    mutable std::unordered_map<double, double, FloatHash> cache;
+
 public:
-    CustomZimgFilter(unsigned taps, VSFunction *func, const VSAPI *vsapi) : taps(taps), func(func), vsapi(vsapi) {}
+    CustomZimgFilter(unsigned taps, VSFunction *func, const VSAPI *vsapi) : taps(taps), func(func), vsapi(vsapi), cache{} {}
 
     ~CustomZimgFilter() {
         vsapi->freeFunction(func);
@@ -793,6 +801,11 @@ public:
     unsigned support() const override { return taps; };
 
     double operator()(double x) const override {
+        auto it = cache.find(x);
+
+        if (it != cache.end())
+            return it->second;
+
         VSMap *_map = vsapi->createMap();
         int _err;
 
@@ -811,6 +824,8 @@ public:
             throw zimg::error::Exception{
                 "Running custom_kernel(" + std::to_string(x) + ") returned error(" + std::to_string(_err) + ") for invalid value: " + std::to_string(value)
             };
+
+        cache[x] = value;
 
         return value;
     };
