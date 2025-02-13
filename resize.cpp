@@ -835,6 +835,22 @@ public:
 };
 
 
+class BlurFilter : public Filter {
+    std::unique_ptr<Filter> impl;
+    double blur;
+
+public:
+    BlurFilter(std::unique_ptr<Filter> impl, double blur = 1.0)
+    : impl(std::move(impl))
+    , blur(blur)
+    {}
+
+    unsigned support() const override { return ceil(blur * impl->support()); }
+
+    double operator()(double x) const override { return (*impl)(x / blur); }
+};
+
+
 struct vszimg_userdata {
     zimg_resample_filter_e filter;
     bool custom;
@@ -1044,6 +1060,11 @@ class vszimg {
 
                 filters[0] = translate_resize_filter(u.filter, filter_param_a, filter_param_b);
                 filters[1] = translate_resize_filter(resample_filter_uv, filter_param_a_uv, filter_param_b_uv);
+            }
+
+            double blur = propGetScalarDef<double>(in, "blur", 1.0, vsapi);
+            for (int i = 0; i < 2; i++) {
+                filters[i] = std::make_unique<BlurFilter>(std::move(filters[i]), blur);
             }
 
             lookup_enum_str_opt(in, "dither_type", g_dither_type_table, h_dither_type_table, &m_params.dither_type, vsapi);
@@ -1429,6 +1450,7 @@ VS_EXTERNAL_API(void) VapourSynthPluginInit2(VSPlugin *plugin, const VSPLUGINAPI
   INT_OPT(force) \
   INT_OPT(force_h) \
   INT_OPT(force_v) \
+  FLOAT_OPT(blur) \
 
     static const char RESAMPLE_ARGS[] =
         "clip:vnode;"
