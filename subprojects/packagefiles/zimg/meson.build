@@ -167,7 +167,7 @@ if opt_ARMSIMD
         'src/zimg/resize/arm/resize_impl_arm.h'
     ]
 
-    NEON_CFLAGS = ['-march=armv7-a', '-mfpu=neon-vfpv4']
+    NEON_CFLAGS = ['-march=native']
     if cxx.has_argument('-mfp16-format=ieee')
         NEON_CFLAGS += ['-mfp16-format=ieee']
     endif

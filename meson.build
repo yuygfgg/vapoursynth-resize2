@@ -1,5 +1,5 @@
 project('resize2', 'cpp',
-  default_options : ['buildtype=release', 'b_ndebug=if-release', 'c_std=c89', 'cpp_std=c++17'],
+  default_options : ['buildtype=release', 'b_ndebug=if-release', 'c_std=c89', 'cpp_std=c++17', 'b_lto=true'],
   meson_version : '>=1.0.0',
   version : '8'
 )
