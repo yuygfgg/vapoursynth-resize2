@@ -4,6 +4,11 @@ project('resize2', 'cpp',
   version : '8'
 )
 
+OPT_CFLAGS = ['-march=native', '-mllvm' ,'-polly', '-mllvm', '-polly-vectorizer=stripmine', '-mllvm', '-polly-tiling']
+
+add_project_arguments(OPT_CFLAGS, language: 'c')
+add_project_arguments(OPT_CFLAGS, language: 'cpp')
+
 sources = [
     'resize.cpp'
 ]

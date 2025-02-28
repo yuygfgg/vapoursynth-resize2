@@ -1,5 +1,5 @@
 project('zimg', 'cpp',
-  default_options : ['c_std=c89', 'cpp_std=c++17'],
+  default_options : ['c_std=c89', 'cpp_std=c++17', 'b_lto=true'],
   meson_version : '>=0.51.0',
   version : '3.0.5'
 )
@@ -167,7 +167,7 @@ if opt_ARMSIMD
         'src/zimg/resize/arm/resize_impl_arm.h'
     ]
 
-    NEON_CFLAGS = ['-march=native']
+    NEON_CFLAGS = ['-march=native', '-mllvm' ,'-polly', '-mllvm', '-polly-vectorizer=stripmine', '-mllvm', '-polly-tiling']
     if cxx.has_argument('-mfp16-format=ieee')
         NEON_CFLAGS += ['-mfp16-format=ieee']
     endif
