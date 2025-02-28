@@ -5,5 +5,6 @@
         "*.vpy": "python",
         "*.rs": "rust",
         "cmath": "cpp"
-    }
+    },
+    "sonarlint.pathToCompileCommands": "${workspaceFolder}/build/compile_commands.json"
 }

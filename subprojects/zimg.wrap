@@ -1,6 +1,6 @@
 [wrap-git]
-url = https://github.com/sekrit-twc/zimg.git
-revision = 9a9a8eab3e29b3583a797d3a1feb6ce0efc05d65
+url = https://github.com/yuygfgg/zimg.git
+revision = 09cb05058be6974c1e8b592acffea2de67b79bf7
 patch_directory = zimg
 diff_files = zimg/0001.patch
 clone-recursive = true
