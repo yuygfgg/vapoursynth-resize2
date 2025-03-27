@@ -2,7 +2,6 @@
 url = https://github.com/yuygfgg/zimg.git
 revision = 06df7b30bae5d077b608b7d7347a719ddf64cc57
 patch_directory = zimg
-diff_files = zimg/0001.patch
 clone-recursive = true
 
 [provide]
