@@ -1,6 +1,6 @@
 [wrap-git]
 url = https://github.com/yuygfgg/zimg.git
-revision = 06df7b30bae5d077b608b7d7347a719ddf64cc57
+revision = df9c1472b9541d0e79c8d02dae37fdf12f189ec2
 patch_directory = zimg
 clone-recursive = true
 
